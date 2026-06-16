@@ -2,14 +2,13 @@ import os
 import urllib.request
 import tarfile
 import tempfile
+import shutil
 
 MODEL_DIR = "./sherpa-onnx-zh-en-model"
-MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zh-en-2023-12-06.tar.bz2"
+MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2"
 REQUIRED_FILES = [
     "tokens.txt",
-    "encoder-epoch-99-avg-1.onnx",
-    "decoder-epoch-99-avg-1.onnx",
-    "joiner-epoch-99-avg-1.onnx"
+    "model.int8.onnx"  # 使用 int8 版本，更小更快
 ]
 
 
@@ -24,7 +23,7 @@ def check_models_exist():
     missing = []
     for f in REQUIRED_FILES:
         filepath = os.path.join(MODEL_DIR, f)
-        if not os.path.isfile(filepath):
+        if not os.path.exists(filepath):
             missing.append(f)
         else:
             print(f"  ✓ 找到文件: {f} ({os.path.getsize(filepath) / 1024 / 1024:.1f}MB)")
@@ -46,27 +45,26 @@ def download_and_extract_models():
     # 创建目录
     os.makedirs(MODEL_DIR, exist_ok=True)
     
-    # 下载到临时文件
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.bz2") as tmp_file:
-        temp_path = tmp_file.name
-    
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tar.bz2") as tmp_file:
+            temp_path = tmp_file.name
+        
         print(f"正在从 {MODEL_URL} 下载...")
         urllib.request.urlretrieve(MODEL_URL, temp_path)
         print(f"下载完成！文件大小: {os.path.getsize(temp_path) / 1024 / 1024:.1f}MB")
         
         print("正在解压...")
         with tarfile.open(temp_path, "r:bz2") as tar:
-            # 先列出所有文件看看结构
+            # 先列出所有文件
             print("压缩包内容:")
             for member in tar.getmembers():
                 print(f"  - {member.name}")
             
-            # 提取所有文件到临时目录，再移动到目标位置
+            # 解压到临时目录
             with tempfile.TemporaryDirectory() as temp_extract_dir:
                 tar.extractall(path=temp_extract_dir)
                 
-                # 查找提取后的文件夹
+                # 查找解压后的文件夹
                 extracted_dirs = [d for d in os.listdir(temp_extract_dir) 
                                   if os.path.isdir(os.path.join(temp_extract_dir, d))]
                 
@@ -74,18 +72,23 @@ def download_and_extract_models():
                     source_dir = os.path.join(temp_extract_dir, extracted_dirs[0])
                     print(f"从目录提取文件: {source_dir}")
                     
-                    # 复制所需文件
+                    # 复制需要的文件
                     for filename in REQUIRED_FILES:
                         src = os.path.join(source_dir, filename)
                         dst = os.path.join(MODEL_DIR, filename)
                         if os.path.exists(src):
-                            import shutil
                             shutil.copy2(src, dst)
                             print(f"  已复制: {filename}")
                         else:
                             print(f"  警告: 未找到 {filename} 在压缩包中")
                 else:
                     print("错误: 未在压缩包中找到文件夹")
+        
+        # 清理临时文件
+        try:
+            os.remove(temp_path)
+        except:
+            pass
         
         print("\n解压后的目录内容:")
         print(os.listdir(MODEL_DIR))
@@ -103,13 +106,6 @@ def download_and_extract_models():
         import traceback
         traceback.print_exc()
         return False
-    finally:
-        # 清理临时文件
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except:
-                pass
 
 
 if __name__ == "__main__":
