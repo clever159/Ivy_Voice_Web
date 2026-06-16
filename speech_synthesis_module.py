@@ -1,18 +1,25 @@
-import pyttsx3
 import threading
+
+# 尝试导入 pyttsx3，如果失败（云端环境）则标记为不可用
+TTS_AVAILABLE = False
+try:
+    import pyttsx3
+    TTS_AVAILABLE = True
+except Exception as e:
+    print(f"pyttsx3 不可用: {e}")
 
 
 def speak_text(text, rate=160, volume=1.0):
     """
     语音朗读函数（在后台线程中执行，不会阻塞调用者）
-
-    参数:
-        text: 要朗读的文本
-        rate: 语速，默认160
-        volume: 音量，默认1.0（最大）
+    云端环境会优雅降级，返回 False 表示 TTS 不可用
     """
     if not text or not str(text).strip():
         print("无内容可朗读")
+        return False
+    
+    if not TTS_AVAILABLE:
+        print("TTS 功能不可用（可能在云端环境）")
         return False
 
     def _speak():
@@ -48,7 +55,7 @@ def speak_text(text, rate=160, volume=1.0):
             engine.runAndWait()
             print("朗读完成")
         except Exception as e:
-            print(f"语音朗读失败：{e}")
+            print(f"语音朗读失败: {e}")
         finally:
             if engine:
                 try:
@@ -67,9 +74,13 @@ if __name__ == "__main__":
     print("测试语音朗读模块...")
 
     print("\n1. 测试中文朗读:")
-    speak_text("你好，欢迎使用语音翻译助手")
+    success = speak_text("你好，欢迎使用语音翻译助手")
+    if not success:
+        print("TTS 不可用，这在云端环境是正常的")
 
     print("\n2. 测试英文朗读:")
-    speak_text("Hello, welcome to voice translation tool")
+    success = speak_text("Hello, welcome to voice translation tool")
+    if not success:
+        print("TTS 不可用，这在云端环境是正常的")
 
     print("\n测试完成")

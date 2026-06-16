@@ -92,8 +92,11 @@ def speak():
 
     # 朗读已在后台线程执行，立即返回
     try:
-        speech_synthesis_module.speak_text(text)
-        return jsonify({"success": True})
+        success = speech_synthesis_module.speak_text(text)
+        if success:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "语音朗读功能在当前环境不可用"}), 501
     except Exception as e:
         print(f"朗读报错: {e}")
         return jsonify({"success": False, "error": f"朗读失败: {e}"}), 500

@@ -1,10 +1,10 @@
 import os
-import sounddevice as sd
 import queue
 import sherpa_onnx
 import time
 import numpy as np
 import wave
+# sounddevice 只在本地录音时需要，云端不会用到，所以不在这里导入
 
 MODEL_DIR = "./sherpa-onnx-zh-en-model"  # 模型目录
 
@@ -91,7 +91,13 @@ def speech_recognize(
     rule3_min_utterance_length=20.0,
     timeout=30.0,
 ):
-    """直接从麦克风录音识别（保留旧方法，暂不修改）"""
+    """直接从麦克风录音识别（仅本地开发使用）"""
+    # 延迟导入，避免云端导入失败
+    try:
+        import sounddevice as sd
+    except Exception as e:
+        return f"本地录音功能不可用: {e}"
+    
     full_text = ""
 
     if not os.path.isdir(model_dir):
