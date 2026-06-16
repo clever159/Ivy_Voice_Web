@@ -74,7 +74,6 @@
         </button>
         <button class="btn btn-trans" id="trans-btn">🔤 立即翻译</button>
         <button class="btn btn-speak" id="speak-input-btn">🔊 朗读原文</button>
-        <button class="btn" id="test-audio-btn" style="background: var(--gray-100); color: var(--gray-600); border: 1px solid var(--gray-200);">🔇 测试音频</button>
       </div>
 
       <div class="error-box" id="error-box"></div>
@@ -110,7 +109,6 @@
     const clearBtn = document.getElementById('clear-btn');
     const charCount = document.getElementById('char-count');
     const statusText = document.getElementById('status-text');
-    const testAudioBtn = document.getElementById('test-audio-btn'); // 新增测试按钮
 
     let isRecording = false;
     let isSpeaking = false;
@@ -563,64 +561,6 @@
     inputText.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.key === 'Enter') {
         doTranslate();
-      }
-    });
-
-    // 测试音频按钮
-    testAudioBtn.addEventListener('click', () => {
-      testAudioBtn.innerHTML = '<span>🔊</span> 测试中...';
-      testAudioBtn.disabled = true;
-      
-      console.log('🔍 开始音频测试...');
-      
-      try {
-        // 测试1：播放一个简单的 Beep 声
-        console.log('📢 测试1：播放测试音...');
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        
-        oscillator.frequency.value = 440; // 440Hz = A
-        gainNode.gain.value = 0.3;
-        oscillator.start();
-        
-        setTimeout(() => {
-          oscillator.stop();
-          console.log('✅ 测试1完成！');
-          
-          // 测试2：朗读测试文本
-          console.log('📢 测试2：朗读测试文本...');
-          const utterance = new SpeechSynthesisUtterance('你好！这是一个测试。');
-          utterance.lang = 'zh-CN';
-          
-          utterance.onstart = () => {
-            console.log('▶️ 测试朗读开始');
-            showSuccess('如果您听到了声音，音频功能正常！');
-          };
-          
-          utterance.onend = () => {
-            console.log('⏹️ 测试朗读结束');
-            testAudioBtn.innerHTML = '🔇 测试音频';
-            testAudioBtn.disabled = false;
-          };
-          
-          utterance.onerror = (e) => {
-            console.error('❌ 测试朗读失败:', e);
-            showError('朗读测试失败，请检查浏览器设置');
-            testAudioBtn.innerHTML = '🔇 测试音频';
-            testAudioBtn.disabled = false;
-          };
-          
-          window.speechSynthesis.speak(utterance);
-        }, 500);
-        
-      } catch (err) {
-        console.error('❌ 音频测试异常:', err);
-        showError('音频测试失败: ' + err.message);
-        testAudioBtn.innerHTML = '🔇 测试音频';
-        testAudioBtn.disabled = false;
       }
     });
 
