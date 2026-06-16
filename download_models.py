@@ -5,10 +5,13 @@ import tempfile
 import shutil
 
 MODEL_DIR = "./sherpa-onnx-zh-en-model"
-MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2"
+# 使用更稳定的中英文模型
+MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-12-06.tar.bz2"
 REQUIRED_FILES = [
     "tokens.txt",
-    "model.int8.onnx"  # 使用 int8 版本，更小更快
+    "encoder-epoch-99-avg-1.onnx",
+    "decoder-epoch-99-avg-1.onnx",
+    "joiner-epoch-99-avg-1.onnx"
 ]
 
 

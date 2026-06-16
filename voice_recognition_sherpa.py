@@ -26,19 +26,21 @@ class Recognizer:
         if not os.path.isdir(MODEL_DIR):
             raise Exception(f"模型目录不存在: {MODEL_DIR}")
 
-        required_files = ["tokens.txt", "model.int8.onnx"]
+        required_files = ["tokens.txt", "encoder-epoch-99-avg-1.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.onnx"]
         missing_files = [f for f in required_files if not os.path.isfile(os.path.join(MODEL_DIR, f))]
         if missing_files:
             raise Exception(f"模型文件缺失: {', '.join(missing_files)}")
 
         print("正在加载模型...")
         try:
-            self.recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-                model=f"{MODEL_DIR}/model.int8.onnx",
+            self.recognizer = sherpa_onnx.OnlineRecognizer.from_transducer(
                 tokens=f"{MODEL_DIR}/tokens.txt",
+                encoder=f"{MODEL_DIR}/encoder-epoch-99-avg-1.onnx",
+                decoder=f"{MODEL_DIR}/decoder-epoch-99-avg-1.onnx",
+                joiner=f"{MODEL_DIR}/joiner-epoch-99-avg-1.onnx",
                 num_threads=4,
+                sample_rate=self.sample_rate,
                 provider="cpu",
-                use_itn=True,  # 启用逆文本规范化（添加标点）
             )
             print("模型加载完成！")
         except Exception as e:
@@ -62,10 +64,13 @@ def recognize_from_file(audio_path, sample_rate=16000):
         # 获取单例识别器
         rec = Recognizer()
 
-        # 创建流并识别
+        # 创建流并输入音频
         stream = rec.recognizer.create_stream()
         stream.accept_waveform(sample_rate, audio_data)
-        rec.recognizer.decode_stream(stream)
+
+        while rec.recognizer.is_ready(stream):
+            rec.recognizer.decode_stream(stream)
+
         result = rec.recognizer.get_result(stream)
         print(f"识别结果: {result}")
 
@@ -73,6 +78,8 @@ def recognize_from_file(audio_path, sample_rate=16000):
 
     except Exception as e:
         print(f"音频识别出错: {e}")
+        import traceback
+        traceback.print_exc()
         return f"音频识别出错: {e}"
 
 
