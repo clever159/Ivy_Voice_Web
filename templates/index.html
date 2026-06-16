@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>语音翻译助手</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue-50:  #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
+      --green-50:  #E1F5EE; --green-100: #9FE1CB; --green-400: #1D9E75; --green-600: #0F6E56; --green-800: #085041;
+      --gray-50:  #F7F8FA; --gray-100: #EEF0F3; --gray-200: #DDE1E7; --gray-400: #9AA3AE; --gray-600: #5F6B7A; --gray-800: #2C3340; --gray-900: #181C22;
+      --radius-md: 10px; --radius-lg: 14px;
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--gray-50); color: var(--gray-800); padding: 2rem 1rem; }
+    .container { max-width: 640px; margin: 0 auto; }
+    .card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1rem; box-shadow: var(--shadow-card); }
+    .title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+    .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; background: var(--blue-50); color: var(--blue-800); cursor: pointer; user-select: none; transition: all 0.2s; }
+    .badge:hover { background: var(--blue-100); }
+    textarea { width: 100%; height: 120px; border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: 10px; font-size: 15px; resize: none; background: var(--gray-50); margin-bottom: 1rem; transition: border-color 0.2s; }
+    textarea:focus { outline: none; border-color: var(--green-400); background: #fff; }
+    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn { padding: 10px 20px; border-radius: var(--radius-md); border: none; font-size: 14px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-mic { background: var(--green-50); color: var(--green-600); border: 1px solid var(--green-100); }
+    .btn-mic:hover:not(:disabled) { background: var(--green-100); }
+    .btn-mic.recording { background: #FCEBEB; color: #A32D2D; border-color: #F09595; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    .btn-trans { background: var(--blue-600); color: #fff; flex: 1; justify-content: center; }
+    .btn-trans:hover:not(:disabled) { background: var(--blue-800); }
+    .btn-speak { background: var(--green-50); color: var(--green-600); border: 1px solid var(--green-100); }
+    .btn-speak:hover:not(:disabled) { background: var(--green-100); }
+    .btn-speak.speaking { background: #E6F1FB; color: var(--blue-800); border-color: var(--blue-100); }
+    .result-box { min-height: 80px; background: var(--gray-100); border-radius: var(--radius-md); padding: 12px; font-size: 15px; margin-top: 10px; border: 1px solid var(--gray-200); line-height: 1.6; }
+    .result-box:empty::before { content: "等待翻译结果..."; color: var(--gray-400); }
+    .error-box { display: none; background: #FCEBEB; color: #A32D2D; border: 1px solid #F09595; padding: 10px; border-radius: var(--radius-md); margin-top: 10px; font-size: 13px; }
+    .success-box { display: none; background: #E1F5EE; color: #0F6E56; border: 1px solid #9FE1CB; padding: 10px; border-radius: var(--radius-md); margin-top: 10px; font-size: 13px; }
+    .lang-switch { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; font-size: 14px; color: var(--gray-600); }
+    .lang-switch select { padding: 6px 10px; border-radius: var(--radius-md); border: 1px solid var(--gray-200); background: #fff; font-size: 14px; cursor: pointer; }
+    .status-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--gray-400); }
+    .char-count { color: var(--gray-400); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 输入区域 -->
+    <div class="card">
+      <div class="title">
+        <span>🚀</span> 语音翻译助手
+        <span class="badge" id="dir-badge" title="点击切换翻译方向">中 → 英</span>
+      </div>
+
+      <div class="lang-switch">
+        <label>翻译方向：</label>
+        <select id="direction-select">
+          <option value="1">中文 → 英文</option>
+          <option value="2">英文 → 中文</option>
+        </select>
+      </div>
+
+      <textarea id="input-text" placeholder="点击下方'语音输入'开始说话，或者直接在这里输入文字..." maxlength="2000"></textarea>
+
+      <div class="status-bar">
+        <span class="char-count" id="char-count">0 / 2000</span>
+        <span id="status-text">就绪</span>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-mic" id="mic-btn">
+          <span id="mic-icon">🎤</span>
+          <span id="mic-text">语音输入</span>
+        </button>
+        <button class="btn btn-trans" id="trans-btn">🔤 立即翻译</button>
+        <button class="btn btn-speak" id="speak-input-btn">🔊 朗读原文</button>
+      </div>
+
+      <div class="error-box" id="error-box"></div>
+      <div class="success-box" id="success-box"></div>
+    </div>
+
+    <!-- 结果区域 -->
+    <div class="card">
+      <div class="title"><span>✨</span> 翻译结果</div>
+      <div class="result-box" id="result-text"></div>
+      <div class="btn-group" style="margin-top: 12px;">
+        <button class="btn btn-speak" id="speak-result-btn">🔊 朗读译文</button>
+        <button class="btn" id="copy-btn" style="background: var(--gray-100); color: var(--gray-600); border: 1px solid var(--gray-200);">📋 复制结果</button>
+        <button class="btn" id="clear-btn" style="background: var(--gray-100); color: var(--gray-600); border: 1px solid var(--gray-200);">🗑️ 清空</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const inputText = document.getElementById('input-text');
+    const micBtn = document.getElementById('mic-btn');
+    const micText = document.getElementById('mic-text');
+    const micIcon = document.getElementById('mic-icon');
+    const transBtn = document.getElementById('trans-btn');
+    const resultText = document.getElementById('result-text');
+    const errorBox = document.getElementById('error-box');
+    const successBox = document.getElementById('success-box');
+    const dirBadge = document.getElementById('dir-badge');
+    const dirSelect = document.getElementById('direction-select');
+    const speakInputBtn = document.getElementById('speak-input-btn');
+    const speakResultBtn = document.getElementById('speak-result-btn');
+    const copyBtn = document.getElementById('copy-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const charCount = document.getElementById('char-count');
+    const statusText = document.getElementById('status-text');
+
+    let isRecording = false;
+    let isSpeaking = false;
+    let currentDirection = '1';
+
+    // 更新字符计数
+    inputText.addEventListener('input', () => {
+      charCount.textContent = `${inputText.value.length} / 2000`;
+    });
+
+    // 切换翻译方向
+    function updateDirection() {
+      currentDirection = dirSelect.value;
+      if (currentDirection === '1') {
+        dirBadge.textContent = '中 → 英';
+        inputText.placeholder = '点击下方"语音输入"开始说话，或者直接在这里输入中文...';
+      } else {
+        dirBadge.textContent = '英 → 中';
+        inputText.placeholder = '点击下方"语音输入"开始说话，或者直接在这里输入英文...';
+      }
+    }
+
+    dirSelect.addEventListener('change', updateDirection);
+    dirBadge.addEventListener('click', () => {
+      dirSelect.value = currentDirection === '1' ? '2' : '1';
+      updateDirection();
+    });
+
+    // 显示错误
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = 'block';
+      successBox.style.display = 'none';
+      setTimeout(() => { errorBox.style.display = 'none'; }, 5000);
+    }
+
+    // 显示成功
+    function showSuccess(msg) {
+      successBox.textContent = msg;
+      successBox.style.display = 'block';
+      errorBox.style.display = 'none';
+      setTimeout(() => { successBox.style.display = 'none'; }, 3000);
+    }
+
+    // 更新状态
+    function setStatus(msg) {
+      statusText.textContent = msg;
+    }
+
+    // 语音输入
+    micBtn.addEventListener('click', async () => {
+      if (isRecording) return;
+
+      // 检查浏览器是否支持麦克风
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showError('您的浏览器不支持语音输入，请使用 Chrome/Edge 等现代浏览器');
+        return;
+      }
+
+      isRecording = true;
+      micText.textContent = '正在录音...';
+      micIcon.textContent = '🔴';
+      micBtn.classList.add('recording');
+      micBtn.disabled = true;
+      errorBox.style.display = 'none';
+      successBox.style.display = 'none';
+      inputText.value = '';
+      inputText.placeholder = '请对着麦克风说话...';
+      setStatus('正在录音识别中...');
+
+      let audioContext = null;
+
+      try {
+        // 请求麦克风权限
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        // 使用 AudioContext 录制原始 PCM 数据
+        audioContext = new AudioContext({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(mediaStream);
+
+        // 创建 ScriptProcessorNode 录制音频
+        const buffer = [];
+        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          const inputData = e.inputBuffer.getChannelData(0);
+          // 转换为 16 位 PCM
+          const pcmData = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          buffer.push(pcmData);
+        };
+
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+
+        // 录制3秒
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // 停止录制
+        processor.disconnect();
+        source.disconnect();
+        audioContext.close();
+        mediaStream.getTracks().forEach(track => track.stop());
+
+        if (buffer.length === 0) {
+          showError('没有录到音频，请检查麦克风是否正常工作');
+          return;
+        }
+
+        // 合并所有音频块
+        const totalLength = buffer.reduce((acc, b) => acc + b.length, 0);
+        const pcmArray = new Int16Array(totalLength);
+        let offset = 0;
+        for (const chunk of buffer) {
+          pcmArray.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        // 创建 WAV 文件
+        const wavBlob = createWavBlob(pcmArray, 16000);
+        console.log(`录制完成: ${pcmArray.length} 样本, WAV大小: ${wavBlob.size} bytes`);
+
+        // 发送到后端
+        const formData = new FormData();
+        formData.append('audio', wavBlob, 'recording.wav');
+
+        setStatus('正在识别...');
+
+        const response = await fetch('/voice-input', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+
+        if (response.ok && data.text) {
+          if (data.text.startsWith('❌') || data.text.startsWith('（未识别')) {
+            showError(data.text);
+            inputText.placeholder = '点击下方"语音输入"开始说话，或者直接在这里输入文字...';
+          } else {
+            inputText.value = data.text;
+            inputText.placeholder = '点击下方"语音输入"开始说话，或者直接在这里输入文字...';
+            showSuccess('语音识别成功！');
+            // 自动翻译
+            await doTranslate();
+          }
+        } else {
+          showError(data.text || '语音识别未返回有效文本');
+        }
+      } catch (err) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          showError('麦克风权限被拒绝，请在浏览器设置中允许使用麦克风');
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          showError('未找到麦克风设备，请检查麦克风是否已连接');
+        } else {
+          showError('语音输入失败: ' + err.message);
+        }
+        console.error(err);
+      } finally {
+        if (audioContext && audioContext.state !== 'closed') {
+          audioContext.close();
+        }
+        isRecording = false;
+        micText.textContent = '语音输入';
+        micIcon.textContent = '🎤';
+        micBtn.classList.remove('recording');
+        micBtn.disabled = false;
+        setStatus('就绪');
+        charCount.textContent = `${inputText.value.length} / 2000`;
+      }
+    });
+
+    // 创建 WAV 文件 Blob
+    function createWavBlob(pcmData, sampleRate) {
+      const dataLength = pcmData.length * 2;
+      const headerLength = 44;
+      const totalLength = headerLength + dataLength;
+
+      const buffer = new ArrayBuffer(totalLength);
+      const view = new DataView(buffer);
+
+      // RIFF header
+      writeString(view, 0, 'RIFF');
+      view.setUint32(4, 36 + dataLength, true);
+      writeString(view, 8, 'WAVE');
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true); // fmt chunk size
+      view.setUint16(20, 1, true); // PCM format
+      view.setUint16(22, 1, true); // mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true); // byte rate
+      view.setUint16(32, 2, true); // block align
+      view.setUint16(34, 16, true); // bits per sample
+      writeString(view, 36, 'data');
+      view.setUint32(40, dataLength, true);
+
+      // Write PCM data
+      const pcmBytes = new Uint8Array(pcmData.buffer);
+      for (let i = 0; i < dataLength; i++) {
+        view.setUint8(headerLength + i, pcmBytes[i]);
+      }
+
+      return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, str) {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    }
+
+    // 翻译功能
+    async function doTranslate() {
+      const text = inputText.value.trim();
+      if (!text) {
+        showError('请输入需要翻译的内容');
+        return;
+      }
+
+      resultText.textContent = '翻译中...';
+      transBtn.disabled = true;
+      setStatus('正在翻译...');
+
+      try {
+        const response = await fetch('/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text, direction: currentDirection })
+        });
+        const data = await response.json();
+
+        if (data.result) {
+          if (data.result.startsWith('❌') || data.result.startsWith('⚠️')) {
+            resultText.textContent = '';
+            showError(data.result);
+          } else {
+            resultText.textContent = data.result;
+            showSuccess('翻译完成！');
+          }
+        } else {
+          resultText.textContent = '';
+          showError('翻译失败：未返回结果');
+        }
+      } catch (err) {
+        resultText.textContent = '';
+        showError('翻译请求失败，请检查网络连接');
+        console.error(err);
+      } finally {
+        transBtn.disabled = false;
+        setStatus('就绪');
+      }
+    }
+
+    transBtn.addEventListener('click', doTranslate);
+
+    // 朗读功能
+    async function speakText(text, btn) {
+      if (!text || text.trim() === '') {
+        showError('没有内容可朗读');
+        return;
+      }
+      if (isSpeaking) {
+        showError('正在朗读中，请稍候...');
+        return;
+      }
+
+      isSpeaking = true;
+      btn.classList.add('speaking');
+      btn.disabled = true;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<span>🔊</span> 朗读中...';
+      setStatus('正在朗读...');
+
+      try {
+        const response = await fetch('/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          showSuccess('朗读完成');
+        } else {
+          showError(data.error || '朗读失败');
+        }
+      } catch (err) {
+        showError('朗读请求失败');
+        console.error(err);
+      } finally {
+        isSpeaking = false;
+        btn.classList.remove('speaking');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        setStatus('就绪');
+      }
+    }
+
+    speakInputBtn.addEventListener('click', () => {
+      speakText(inputText.value, speakInputBtn);
+    });
+
+    speakResultBtn.addEventListener('click', () => {
+      speakText(resultText.textContent, speakResultBtn);
+    });
+
+    // 复制结果
+    copyBtn.addEventListener('click', async () => {
+      const text = resultText.textContent;
+      if (!text || text === '等待翻译结果...') {
+        showError('没有可复制的内容');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        showSuccess('已复制到剪贴板！');
+      } catch (err) {
+        // 降级方案
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showSuccess('已复制到剪贴板！');
+      }
+    });
+
+    // 清空
+    clearBtn.addEventListener('click', () => {
+      inputText.value = '';
+      resultText.textContent = '';
+      charCount.textContent = '0 / 2000';
+      errorBox.style.display = 'none';
+      successBox.style.display = 'none';
+      setStatus('已清空');
+      setTimeout(() => setStatus('就绪'), 1500);
+    });
+
+    // 键盘快捷键
+    inputText.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        doTranslate();
+      }
+    });
+
+    // 初始化
+    updateDirection();
+  </script>
+</body>
+</html>
