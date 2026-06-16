@@ -3,7 +3,33 @@ import sherpa_onnx
 import numpy as np
 import wave
 
-MODEL_DIR = "./sherpa-onnx-zh-en-model"  # 模型目录
+# 可能的模型目录
+ALTERNATIVE_MODEL_DIRS = [
+    "./sherpa-onnx-zh-en-model",
+    "./sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
+]
+REQUIRED_FILES = [
+    "tokens.txt",
+    "encoder-epoch-99-avg-1.onnx",
+    "decoder-epoch-99-avg-1.onnx",
+    "joiner-epoch-99-avg-1.onnx"
+]
+
+
+def find_model_dir():
+    """查找包含所需模型文件的目录"""
+    for dir_path in ALTERNATIVE_MODEL_DIRS:
+        if os.path.isdir(dir_path):
+            # 检查目录中是否有需要的文件
+            has_all = True
+            for f in REQUIRED_FILES:
+                if not os.path.isfile(os.path.join(dir_path, f)):
+                    has_all = False
+                    break
+            if has_all:
+                print(f"✅ 找到模型目录: {dir_path}")
+                return dir_path
+    return None
 
 
 class Recognizer:
@@ -15,6 +41,7 @@ class Recognizer:
             cls._instance = super().__new__(cls)
             cls._instance.recognizer = None
             cls._instance.sample_rate = 16000
+            cls._instance.model_dir = None
             cls._instance._load_model()
         return cls._instance
 
@@ -23,21 +50,17 @@ class Recognizer:
         if self.recognizer is not None:
             return
         
-        if not os.path.isdir(MODEL_DIR):
-            raise Exception(f"模型目录不存在: {MODEL_DIR}")
-
-        required_files = ["tokens.txt", "encoder-epoch-99-avg-1.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.onnx"]
-        missing_files = [f for f in required_files if not os.path.isfile(os.path.join(MODEL_DIR, f))]
-        if missing_files:
-            raise Exception(f"模型文件缺失: {', '.join(missing_files)}")
+        self.model_dir = find_model_dir()
+        if self.model_dir is None:
+            raise Exception(f"未找到模型目录，请检查: {ALTERNATIVE_MODEL_DIRS}")
 
         print("正在加载模型...")
         try:
             self.recognizer = sherpa_onnx.OnlineRecognizer.from_transducer(
-                tokens=f"{MODEL_DIR}/tokens.txt",
-                encoder=f"{MODEL_DIR}/encoder-epoch-99-avg-1.onnx",
-                decoder=f"{MODEL_DIR}/decoder-epoch-99-avg-1.onnx",
-                joiner=f"{MODEL_DIR}/joiner-epoch-99-avg-1.onnx",
+                tokens=f"{self.model_dir}/tokens.txt",
+                encoder=f"{self.model_dir}/encoder-epoch-99-avg-1.onnx",
+                decoder=f"{self.model_dir}/decoder-epoch-99-avg-1.onnx",
+                joiner=f"{self.model_dir}/joiner-epoch-99-avg-1.onnx",
                 num_threads=4,
                 sample_rate=self.sample_rate,
                 provider="cpu",

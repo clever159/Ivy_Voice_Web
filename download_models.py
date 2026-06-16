@@ -4,9 +4,14 @@ import tarfile
 import tempfile
 import shutil
 
+# 可能的模型目录
 MODEL_DIR = "./sherpa-onnx-zh-en-model"
-# 使用更稳定的中英文模型
-MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-12-06.tar.bz2"
+ALTERNATIVE_MODEL_DIRS = [
+    "./sherpa-onnx-zh-en-model",
+    "./sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
+]
+# 正确的下载 URL
+MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2"
 REQUIRED_FILES = [
     "tokens.txt",
     "encoder-epoch-99-avg-1.onnx",
@@ -15,17 +20,36 @@ REQUIRED_FILES = [
 ]
 
 
-def check_models_exist():
+def find_model_dir():
+    """查找包含所需模型文件的目录"""
+    for dir_path in ALTERNATIVE_MODEL_DIRS:
+        if os.path.isdir(dir_path):
+            # 检查目录中是否有需要的文件
+            has_all = True
+            for f in REQUIRED_FILES:
+                if not os.path.isfile(os.path.join(dir_path, f)):
+                    has_all = False
+                    break
+            if has_all:
+                print(f"✅ 找到模型目录: {dir_path}")
+                return dir_path
+    return None
+
+
+def check_models_exist(dir_path=None):
     """检查模型文件是否都存在"""
-    if not os.path.isdir(MODEL_DIR):
-        print(f"模型目录不存在: {MODEL_DIR}")
-        return False
+    if dir_path is None:
+        dir_path = find_model_dir()
+        if dir_path is None:
+            print("未找到模型目录")
+            return False
     
-    print(f"检查模型目录内容: {os.listdir(MODEL_DIR)}")
+    print(f"检查模型目录: {dir_path}")
+    print(f"目录内容: {os.listdir(dir_path)}")
     
     missing = []
     for f in REQUIRED_FILES:
-        filepath = os.path.join(MODEL_DIR, f)
+        filepath = os.path.join(dir_path, f)
         if not os.path.exists(filepath):
             missing.append(f)
         else:
@@ -39,6 +63,7 @@ def check_models_exist():
 
 def download_and_extract_models():
     """下载并解压模型文件"""
+    # 首先检查是否已经有模型
     if check_models_exist():
         print("✅ 模型文件已存在，跳过下载")
         return True

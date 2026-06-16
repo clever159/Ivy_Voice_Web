@@ -7,4 +7,6 @@ __pycache__/
 *.log
 .DS_Store
 # 模型文件（体积太大，不提交到 git）
-sherpa-onnx-zh-en-model/*.onnx
+sherpa-onnx-zh-en-model/
+sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/
+*.onnx
