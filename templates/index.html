@@ -49,18 +49,9 @@
     <div class="card">
       <div class="title">
         <span>🚀</span> 语音翻译助手
-        <span class="badge" id="dir-badge" title="点击切换翻译方向">中 → 英</span>
       </div>
 
-      <div class="lang-switch">
-        <label>翻译方向：</label>
-        <select id="direction-select">
-          <option value="1">中文 → 英文</option>
-          <option value="2">英文 → 中文</option>
-        </select>
-      </div>
-
-      <textarea id="input-text" placeholder="点击下方'语音输入'开始说话，或者直接在这里输入文字..." maxlength="2000"></textarea>
+      <textarea id="input-text" placeholder="点击下方「语音输入」开始说话，或者直接在这里输入文字..." maxlength="2000"></textarea>
 
       <div class="status-bar">
         <span class="char-count" id="char-count">0 / 2000</span>
@@ -101,8 +92,6 @@
     const resultText = document.getElementById('result-text');
     const errorBox = document.getElementById('error-box');
     const successBox = document.getElementById('success-box');
-    const dirBadge = document.getElementById('dir-badge');
-    const dirSelect = document.getElementById('direction-select');
     const speakInputBtn = document.getElementById('speak-input-btn');
     const speakResultBtn = document.getElementById('speak-result-btn');
     const copyBtn = document.getElementById('copy-btn');
@@ -112,7 +101,6 @@
 
     let isRecording = false;
     let isSpeaking = false;
-    let currentDirection = '1';
     let audioContext = null;
     let mediaStreamSource = null;
     let processor = null;
@@ -122,24 +110,6 @@
     // 更新字符计数
     inputText.addEventListener('input', () => {
       charCount.textContent = `${inputText.value.length} / 2000`;
-    });
-
-    // 切换翻译方向
-    function updateDirection() {
-      currentDirection = dirSelect.value;
-      if (currentDirection === '1') {
-        dirBadge.textContent = '中 → 英';
-        inputText.placeholder = '点击下方"语音输入"开始说话，或者直接在这里输入中文...';
-      } else {
-        dirBadge.textContent = '英 → 中';
-        inputText.placeholder = '点击下方"语音输入"开始说话，或者直接在这里输入英文...';
-      }
-    }
-
-    dirSelect.addEventListener('change', updateDirection);
-    dirBadge.addEventListener('click', () => {
-      dirSelect.value = currentDirection === '1' ? '2' : '1';
-      updateDirection();
     });
 
     // 显示错误
@@ -371,7 +341,7 @@
         const response = await fetch('/translate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text, direction: currentDirection })
+          body: JSON.stringify({ text: text })
         });
         const data = await response.json();
 
@@ -563,9 +533,6 @@
         doTranslate();
       }
     });
-
-    // 初始化
-    updateDirection();
   </script>
 </body>
 </html>

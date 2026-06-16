@@ -46,18 +46,17 @@ def index():
 
 @app.route("/translate", methods=["POST"])
 def translate():
-    """文本翻译接口"""
+    """翻译接口 - 自动检测语言"""
     data = request.get_json()
     if not data:
         return jsonify({"result": "❌ 请求数据为空"}), 400
 
     text = data.get("text", "").strip()
-    direction = data.get("direction", "1")
 
     if not text:
         return jsonify({"result": "⚠️ 输入内容为空"}), 400
 
-    result = translation_module.translate_text(text, direction)
+    result = translation_module.translate_text(text)
     return jsonify({"result": result})
 
 
