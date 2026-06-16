@@ -5,3 +5,4 @@ requests>=2.28.0
 sounddevice>=0.4.6
 sherpa-onnx>=1.10.0
 python-dotenv>=1.0.0
+numpy>=1.20.0
