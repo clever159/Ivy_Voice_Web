@@ -41,6 +41,9 @@
     .lang-switch select { padding: 6px 10px; border-radius: var(--radius-md); border: 1px solid var(--gray-200); background: #fff; font-size: 14px; cursor: pointer; }
     .status-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 12px; color: var(--gray-400); }
     .char-count { color: var(--gray-400); }
+    .recording-indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #A32D2D; font-weight: 500; }
+    .recording-dot { width: 10px; height: 10px; background: #A32D2D; border-radius: 50%; animation: blink 1s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   </style>
 </head>
 <body>
@@ -113,6 +116,9 @@
     let isRecording = false;
     let isSpeaking = false;
     let currentDirection = '1';
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let stream = null;
 
     // 更新字符计数
     inputText.addEventListener('input', () => {
@@ -158,100 +164,97 @@
       statusText.textContent = msg;
     }
 
-    // 语音输入
-    micBtn.addEventListener('click', async () => {
-      if (isRecording) return;
-
-      // 检查浏览器是否支持麦克风
+    // 开始录音
+    async function startRecording() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showError('您的浏览器不支持语音输入，请使用 Chrome/Edge 等现代浏览器');
         return;
       }
 
-      isRecording = true;
-      micText.textContent = '正在录音...';
-      micIcon.textContent = '🔴';
-      micBtn.classList.add('recording');
-      micBtn.disabled = true;
-      errorBox.style.display = 'none';
-      successBox.style.display = 'none';
-      inputText.value = '';
-      inputText.placeholder = '请对着麦克风说话...';
-      setStatus('正在录音识别中...');
-
-      let audioContext = null;
-
       try {
-        // 请求麦克风权限
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
+        stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             sampleRate: 16000,
             channelCount: 1,
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
           }
         });
 
-        // 使用 AudioContext 录制原始 PCM 数据
-        audioContext = new AudioContext({ sampleRate: 16000 });
-        const source = audioContext.createMediaStreamSource(mediaStream);
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
 
-        // 创建 ScriptProcessorNode 录制音频
-        const buffer = [];
-        const processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-        processor.onaudioprocess = (e) => {
-          const inputData = e.inputBuffer.getChannelData(0);
-          // 转换为 16 位 PCM
-          const pcmData = new Int16Array(inputData.length);
-          for (let i = 0; i < inputData.length; i++) {
-            const s = Math.max(-1, Math.min(1, inputData[i]));
-            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          }
-          buffer.push(pcmData);
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
         };
 
-        source.connect(processor);
-        processor.connect(audioContext.destination);
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+          await sendAudioForRecognition(audioBlob);
+          cleanup();
+        };
 
-        // 录制3秒
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        mediaRecorder.start();
+        isRecording = true;
 
-        // 停止录制
-        processor.disconnect();
-        source.disconnect();
-        audioContext.close();
-        mediaStream.getTracks().forEach(track => track.stop());
+        // 更新 UI
+        micText.textContent = '停止录音';
+        micIcon.textContent = '⏹️';
+        micBtn.classList.add('recording');
+        setStatus('正在录音...点击停止');
+        inputText.placeholder = '正在录音...再次点击停止';
+        errorBox.style.display = 'none';
+        successBox.style.display = 'none';
 
-        if (buffer.length === 0) {
-          showError('没有录到音频，请检查麦克风是否正常工作');
-          return;
+      } catch (err) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          showError('麦克风权限被拒绝，请在浏览器设置中允许使用麦克风');
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          showError('未找到麦克风设备，请检查麦克风是否已连接');
+        } else {
+          showError('录音失败: ' + err.message);
         }
+        console.error(err);
+      }
+    }
 
-        // 合并所有音频块
-        const totalLength = buffer.reduce((acc, b) => acc + b.length, 0);
-        const pcmArray = new Int16Array(totalLength);
-        let offset = 0;
-        for (const chunk of buffer) {
-          pcmArray.set(chunk, offset);
-          offset += chunk.length;
-        }
+    // 停止录音
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    }
 
-        // 创建 WAV 文件
-        const wavBlob = createWavBlob(pcmArray, 16000);
-        console.log(`录制完成: ${pcmArray.length} 样本, WAV大小: ${wavBlob.size} bytes`);
+    // 清理资源
+    function cleanup() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      mediaRecorder = null;
+      isRecording = false;
 
-        // 发送到后端
+      // 恢复 UI
+      micText.textContent = '语音输入';
+      micIcon.textContent = '🎤';
+      micBtn.classList.remove('recording');
+      setStatus('就绪');
+    }
+
+    // 发送音频到后端识别
+    async function sendAudioForRecognition(audioBlob) {
+      setStatus('正在识别...');
+
+      try {
         const formData = new FormData();
-        formData.append('audio', wavBlob, 'recording.wav');
-
-        setStatus('正在识别...');
+        formData.append('audio', audioBlob, 'recording.wav');
 
         const response = await fetch('/voice-input', {
           method: 'POST',
           body: formData
         });
+
         const data = await response.json();
 
         if (response.ok && data.text) {
@@ -261,6 +264,7 @@
           } else {
             inputText.value = data.text;
             inputText.placeholder = '点击下方"语音输入"开始说话，或者直接在这里输入文字...';
+            charCount.textContent = `${inputText.value.length} / 2000`;
             showSuccess('语音识别成功！');
             // 自动翻译
             await doTranslate();
@@ -269,29 +273,23 @@
           showError(data.text || '语音识别未返回有效文本');
         }
       } catch (err) {
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          showError('麦克风权限被拒绝，请在浏览器设置中允许使用麦克风');
-        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          showError('未找到麦克风设备，请检查麦克风是否已连接');
-        } else {
-          showError('语音输入失败: ' + err.message);
-        }
+        showError('语音识别请求失败: ' + err.message);
         console.error(err);
-      } finally {
-        if (audioContext && audioContext.state !== 'closed') {
-          audioContext.close();
-        }
-        isRecording = false;
-        micText.textContent = '语音输入';
-        micIcon.textContent = '🎤';
-        micBtn.classList.remove('recording');
-        micBtn.disabled = false;
-        setStatus('就绪');
-        charCount.textContent = `${inputText.value.length} / 2000`;
+      }
+
+      setStatus('就绪');
+    }
+
+    // 语音输入按钮点击
+    micBtn.addEventListener('click', () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
       }
     });
 
-    // 创建 WAV 文件 Blob
+    // 创建 WAV 文件 Blob（保留旧方法作为备用）
     function createWavBlob(pcmData, sampleRate) {
       const dataLength = pcmData.length * 2;
       const headerLength = 44;

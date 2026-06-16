@@ -16,10 +16,22 @@ REQUIRED_FILES = [
 def check_models_exist():
     """检查模型文件是否都存在"""
     if not os.path.isdir(MODEL_DIR):
+        print(f"模型目录不存在: {MODEL_DIR}")
         return False
+    
+    print(f"检查模型目录: {os.listdir(MODEL_DIR)}")
+    
+    missing = []
     for f in REQUIRED_FILES:
-        if not os.path.isfile(os.path.join(MODEL_DIR, f)):
-            return False
+        filepath = os.path.join(MODEL_DIR, f)
+        if not os.path.isfile(filepath):
+            missing.append(f)
+        else:
+            print(f"  ✓ 找到文件: {f} ({os.path.getsize(filepath) / 1024 / 1024:.1f}MB)")
+    
+    if missing:
+        print(f"  ✗ 缺失文件: {missing}")
+        return False
     return True
 
 
@@ -41,21 +53,55 @@ def download_and_extract_models():
     try:
         print(f"正在从 {MODEL_URL} 下载...")
         urllib.request.urlretrieve(MODEL_URL, temp_path)
+        print(f"下载完成！文件大小: {os.path.getsize(temp_path) / 1024 / 1024:.1f}MB")
         
-        print("下载完成，正在解压...")
+        print("正在解压...")
         with tarfile.open(temp_path, "r:bz2") as tar:
-            # 只提取需要的文件
+            # 先列出所有文件看看结构
+            print("压缩包内容:")
             for member in tar.getmembers():
-                if member.isfile() and member.name.split("/")[-1] in REQUIRED_FILES:
-                    # 提取到正确的目录
-                    member.name = os.path.basename(member.name)
-                    tar.extract(member, path=MODEL_DIR)
+                print(f"  - {member.name}")
+            
+            # 提取所有文件到临时目录，再移动到目标位置
+            with tempfile.TemporaryDirectory() as temp_extract_dir:
+                tar.extractall(path=temp_extract_dir)
+                
+                # 查找提取后的文件夹
+                extracted_dirs = [d for d in os.listdir(temp_extract_dir) 
+                                  if os.path.isdir(os.path.join(temp_extract_dir, d))]
+                
+                if extracted_dirs:
+                    source_dir = os.path.join(temp_extract_dir, extracted_dirs[0])
+                    print(f"从目录提取文件: {source_dir}")
+                    
+                    # 复制所需文件
+                    for filename in REQUIRED_FILES:
+                        src = os.path.join(source_dir, filename)
+                        dst = os.path.join(MODEL_DIR, filename)
+                        if os.path.exists(src):
+                            import shutil
+                            shutil.copy2(src, dst)
+                            print(f"  已复制: {filename}")
+                        else:
+                            print(f"  警告: 未找到 {filename} 在压缩包中")
+                else:
+                    print("错误: 未在压缩包中找到文件夹")
         
-        print("模型文件解压完成！")
-        return True
+        print("\n解压后的目录内容:")
+        print(os.listdir(MODEL_DIR))
+        
+        print("\n验证模型文件...")
+        if check_models_exist():
+            print("✅ 模型文件准备完成！")
+            return True
+        else:
+            print("❌ 模型文件仍然缺失！")
+            return False
         
     except Exception as e:
         print(f"下载模型失败: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         # 清理临时文件
