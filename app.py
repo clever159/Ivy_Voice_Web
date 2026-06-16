@@ -7,6 +7,19 @@ from dotenv import load_dotenv
 # 加载 .env 文件（如果存在）
 load_dotenv()
 
+# 检查并下载模型（在模块导入时就执行，确保 gunicorn 部署也能正常工作）
+try:
+    from download_models import download_and_extract_models, check_models_exist
+    if not check_models_exist():
+        print("模型文件缺失，正在自动下载...")
+        download_success = download_and_extract_models()
+        if download_success:
+            print("模型下载完成！")
+        else:
+            print("警告：模型下载失败，请手动下载！")
+except Exception as e:
+    print(f"模型下载检查失败: {e}")
+
 import translation_module
 import voice_recognition_sherpa
 import speech_synthesis_module
