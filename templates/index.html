@@ -399,46 +399,85 @@
 
     transBtn.addEventListener('click', doTranslate);
 
-    // 朗读功能
-    async function speakText(text, btn) {
+    // 朗读功能 - 使用浏览器原生 Web Speech API！
+    function speakText(text, btn) {
       if (!text || text.trim() === '') {
         showError('没有内容可朗读');
         return;
       }
       if (isSpeaking) {
-        showError('正在朗读中，请稍候...');
+        // 停止正在进行的朗读
+        window.speechSynthesis.cancel();
+        isSpeaking = false;
+        btn.classList.remove('speaking');
+        btn.disabled = false;
+        btn.innerHTML = (btn === speakInputBtn) ? '🔊 朗读原文' : '🔊 朗读译文';
+        setStatus('就绪');
         return;
       }
 
       isSpeaking = true;
       btn.classList.add('speaking');
-      btn.disabled = true;
+      btn.disabled = false; // Web Speech API 不需要禁用按钮
       const originalText = btn.innerHTML;
-      btn.innerHTML = '<span>🔊</span> 朗读中...';
+      btn.innerHTML = '<span>⏹️</span> 停止朗读';
       setStatus('正在朗读...');
 
       try {
-        const response = await fetch('/speak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text })
-        });
-        const data = await response.json();
-
-        if (data.success) {
-          showSuccess('朗读完成');
-        } else {
-          showError(data.error || '朗读失败');
+        // 检查浏览器支持
+        if (!('speechSynthesis' in window)) {
+          showError('您的浏览器不支持语音朗读功能');
+          isSpeaking = false;
+          btn.classList.remove('speaking');
+          btn.innerHTML = originalText;
+          setStatus('就绪');
+          return;
         }
+
+        // 停止当前正在朗读的内容
+        window.speechSynthesis.cancel();
+
+        // 创建朗读对象
+        const utterance = new SpeechSynthesisUtterance(text);
+
+        // 判断语言
+        const hasChinese = /[\u4e00-\u9fff]/.test(text);
+        if (hasChinese) {
+          utterance.lang = 'zh-CN';
+        } else {
+          utterance.lang = 'en-US';
+        }
+
+        utterance.rate = 0.9; // 稍微慢一点，更清晰
+        utterance.pitch = 1;
+
+        utterance.onend = () => {
+          isSpeaking = false;
+          btn.classList.remove('speaking');
+          btn.innerHTML = originalText;
+          setStatus('就绪');
+          showSuccess('朗读完成');
+        };
+
+        utterance.onerror = (event) => {
+          console.error('朗读出错:', event);
+          isSpeaking = false;
+          btn.classList.remove('speaking');
+          btn.innerHTML = originalText;
+          setStatus('就绪');
+          showError('朗读失败');
+        };
+
+        // 开始朗读
+        window.speechSynthesis.speak(utterance);
+
       } catch (err) {
-        showError('朗读请求失败');
-        console.error(err);
-      } finally {
+        console.error('朗读出错:', err);
         isSpeaking = false;
         btn.classList.remove('speaking');
-        btn.disabled = false;
         btn.innerHTML = originalText;
         setStatus('就绪');
+        showError('朗读失败: ' + err.message);
       }
     }
 
